@@ -1,8 +1,6 @@
 streamlit
-pytesseract
-opencv-python
 pillow
 googletrans==4.0.0-rc1
 gtts
 python-dotenv
-google-generativeai
+google-genai
