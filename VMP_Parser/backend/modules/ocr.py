@@ -1,41 +1,45 @@
 """
 ocr.py - Optical Character Recognition module
-Handles image preprocessing and text extraction using Tesseract OCR.
+Uses Gemini Vision API for text extraction from prescription images.
 """
 
-import cv2
-import pytesseract
-from modules.utils import clean_text
+import os
+from PIL import Image
+from dotenv import load_dotenv
+from google import genai
 
+load_dotenv()
 
-def preprocess_image(image_path: str):
-    """
-    Preprocess the image for better OCR accuracy.
-    Steps: grayscale conversion, Gaussian blur, adaptive thresholding.
-    """
-    image = cv2.imread(image_path)
-    if image is None:
-        raise FileNotFoundError(f"Image not found at: {image_path}")
+# Configure Gemini client once
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+EXTRACTION_PROMPT = """You are an expert medical prescription reader.
 
-    # Apply Gaussian blur to reduce noise
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+Carefully read the prescription image.
+Extract all visible text exactly as written.
 
-    # Apply adaptive thresholding for better contrast
-    thresh = cv2.adaptiveThreshold(
-        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-    )
-
-    return thresh
+Rules:
+- Preserve medicine names
+- Preserve dosage values
+- Preserve frequency patterns (like 1-0-1, BD, OD, TDS)
+- Preserve duration (like 5 days, x7d)
+- Do NOT explain
+- Do NOT summarize
+- Return only the extracted text"""
 
 
 def extract_text(image_path: str) -> str:
     """
-    Extract text from a prescription image using Tesseract OCR.
+    Extract text from a prescription image using Gemini Vision API.
     Returns cleaned text string.
     """
-    preprocessed = preprocess_image(image_path)
-    raw_text = pytesseract.image_to_string(preprocessed)
-    return clean_text(raw_text)
+    try:
+        image = Image.open(image_path)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=[EXTRACTION_PROMPT, image],
+        )
+        return response.text.strip() if response.text else ""
+    except Exception as e:
+        print(f"[OCR Error] Failed to extract text: {e}")
+        return ""
